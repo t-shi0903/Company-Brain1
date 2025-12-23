@@ -58,7 +58,7 @@ export interface ResourceSuggestion {
 export class GeminiService {
     private genAI: GoogleGenerativeAI;
     private model: GenerativeModel;
-    private modelName: string = 'gemini-1.5-flash';
+    private modelName: string = 'gemini-flash-latest';
 
     constructor(apiKey?: string) {
         const key = apiKey || process.env.GEMINI_API_KEY;
