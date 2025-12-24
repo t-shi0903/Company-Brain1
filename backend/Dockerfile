@@ -3,18 +3,18 @@ FROM node:20-slim
 WORKDIR /app
 
 # バックエンドの依存関係をコピー
-COPY backend/package*.json ./
+COPY package*.json ./
 
 # 依存関係をインストール
 RUN npm install
 
 # ソースコードをコピー
-COPY backend/ ./
+COPY . ./
 
 # TypeScriptをビルド
 RUN npm run build
 
-# ポート3001を公開
+# ポート8080を公開（Cloud Runのデフォルト）
 EXPOSE 8080
 
 # 環境変数でポートを設定

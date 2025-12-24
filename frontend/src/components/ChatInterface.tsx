@@ -6,7 +6,7 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     timestamp: Date;
-    sources?: string[];
+    sources?: { title: string; url?: string }[];
     suggestedQuestions?: string[];
 }
 
@@ -52,9 +52,13 @@ function ChatInterface() {
         setIsLoading(true);
 
         try {
+            const token = localStorage.getItem('google_id_token');
             const response = await fetch('/api/chat', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ question }),
             });
 
@@ -132,7 +136,20 @@ function ChatInterface() {
                                 <div className="message-sources">
                                     <span className="sources-label">📚 参照:</span>
                                     {message.sources.map((source, i) => (
-                                        <span key={i} className="source-tag">{source}</span>
+                                        source.url ? (
+                                            <a
+                                                key={i}
+                                                href={source.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="source-tag source-link"
+                                                title="Google Driveで開く"
+                                            >
+                                                {source.title} 🔗
+                                            </a>
+                                        ) : (
+                                            <span key={i} className="source-tag">{source.title}</span>
+                                        )
                                     ))}
                                 </div>
                             )}

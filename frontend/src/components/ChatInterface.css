@@ -121,6 +121,21 @@
     border: 1px solid rgba(99, 102, 241, 0.3);
 }
 
+.source-link {
+    text-decoration: none;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.source-link:hover {
+    background: rgba(99, 102, 241, 0.25);
+    border-color: var(--color-primary-400);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+}
+
 /* サジェスト */
 .suggested-questions {
     display: flex;

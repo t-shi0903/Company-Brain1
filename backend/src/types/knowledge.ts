@@ -27,8 +27,10 @@ export interface KnowledgeArticle {
     content: string;
     /** 要約（AI生成または手動） */
     summary: string;
-    /** 情報源タイプ */
-    sourceType?: 'google_drive' | 'manual' | 'file_upload';
+    /** 情報源の種類 (google_drive, slack, manual等) */
+    sourceType: 'google_drive' | 'slack' | 'manual';
+    /** 情報源のURL (Google Driveのリンク等) */
+    sourceUrl?: string;
     /** カテゴリ */
     category: KnowledgeCategory;
     /** タグ */

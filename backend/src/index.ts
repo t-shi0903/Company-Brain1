@@ -19,8 +19,9 @@ import {
     CompanyContext,
     ProjectRequirement,
 } from './types';
-import { getGeminiService, getGoogleDriveService, getKnowledgeManager, StorageService } from './services';
+import { getGeminiService, getGoogleDriveService, getKnowledgeManager, getVectorStoreService, StorageService } from './services';
 import { analyzeProject, detectRisk, parseDocument } from './services/ai';
+import { authMiddleware } from './middleware/auth';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -165,14 +166,18 @@ const sampleFAQs: FAQ[] = [
 ];
 
 const companyContext: CompanyContext = {
+    companyName: 'TechCorp',
+    mission: 'Empower the world with AI.',
+    values: ['Innovation', 'Integrity', 'Impact'],
     companyInfo: {
-        name: 'サンプル株式会社',
-        industry: 'IT・ソフトウェア開発',
-        description: 'Webアプリケーションとモバイルアプリの受託開発を行う技術会社です。',
+        name: 'TechCorp Inc.',
+        industry: 'Software Development',
+        description: 'Leading provider of AI solutions.',
+        foundedYear: 2020,
+        employees: 150,
+        baseLocation: 'Tokyo'
     },
-    relevantArticles: [],
     relevantFAQs: sampleFAQs,
-    relevantPolicies: [],
 };
 
 // 初期化ロジック
@@ -202,6 +207,11 @@ app.get('/api/health', (req: Request, res: Response) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.use('/api', (req, res, next) => {
+    if (req.path === '/health') return next();
+    return authMiddleware(req, res, next);
+});
+
 /**
  * AIに質問する
  */
@@ -214,16 +224,15 @@ app.post('/api/chat', async (req: Request, res: Response) => {
         }
 
         const gemini = getGeminiService();
-        const knowledgeManager = getKnowledgeManager();
+        const vectorStore = getVectorStoreService();
+        const relevantArticles = await vectorStore.search(question);
 
-        // ナレッジを検索（現在は全検索だが、将来的にはベクトル検索等にアップグレード可能）
-        const allKnowledge = await knowledgeManager.getAllKnowledge();
-
-        // 簡易的なキーワードマッチングによる関連度の高いナレッジの抽出
-        const relevantArticles = allKnowledge.filter(article =>
-            question.split('').some((char: string) => article.content.includes(char)) ||
-            article.title.includes(question)
-        ).slice(0, 3); // 上位3件
+        // Fallback or logging if no articles found
+        if (relevantArticles.length === 0) {
+            console.log('No relevant articles found by vector search.');
+            // 必要に応じて従来のgetAllKnowledge()フォールバックを実装可能だが、
+            // GCS移行後はパフォーマンス懸念があるため、ここでは空として扱う
+        }
 
         const context: CompanyContext = {
             ...companyContext,
@@ -369,7 +378,16 @@ app.post('/api/sync-drive', async (req: Request, res: Response) => {
             console.log(`[DriveSync] Processing file: ${file.name} (${file.mimeType})`);
             if (file.id && file.name && file.mimeType) {
                 const content = await driveService.getFileContent(file.id, file.mimeType);
-                const article = await knowledgeManager.processAndSave(file.name, content, file.mimeType);
+                const article = await knowledgeManager.processAndSave(file.name, content, file.mimeType, file.webViewLink || undefined);
+
+                // Pineconeへベクトル保存
+                try {
+                    const vectorStore = getVectorStoreService();
+                    await vectorStore.upsertArticle(article);
+                } catch (e) {
+                    console.error(`Vector upsert failed for ${file.name}:`, e);
+                }
+
                 results.push(article);
             }
         }

@@ -7,6 +7,7 @@ export * from './ai';
 export * from './storage';
 export * from './google-drive';
 export * from './knowledge-manager';
+export * from './vector-store';
 
 import { GeminiService } from './gemini';
 import { GoogleDriveService } from './google-drive';

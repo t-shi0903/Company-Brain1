@@ -52,10 +52,13 @@ function Dashboard() {
     useEffect(() => {
         const fetchData = async () => {
             try {
+                const token = localStorage.getItem('google_id_token');
+                const headers = { 'Authorization': `Bearer ${token}` };
+
                 const [projectsRes, membersRes, alertsRes] = await Promise.all([
-                    fetch('/api/projects'),
-                    fetch('/api/members'),
-                    fetch('/api/risks'),
+                    fetch('/api/projects', { headers }),
+                    fetch('/api/members', { headers }),
+                    fetch('/api/risks', { headers }),
                 ]);
 
                 if (projectsRes.ok) {

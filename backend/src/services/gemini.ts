@@ -19,13 +19,11 @@ import {
 /** AI応答 */
 export interface AIResponse {
     /** 回答テキスト */
-    answer: string;
+    content: string;
     /** 参照したソース */
-    sources: string[];
-    /** 信頼度スコア（0-100） */
-    confidence: number;
+    sources: { title: string; url?: string }[];
     /** 関連する追加質問の提案 */
-    suggestedQuestions?: string[];
+    relatedQuestions?: string[];
 }
 
 /** 抽出データ */
@@ -59,6 +57,7 @@ export class GeminiService {
     private genAI: GoogleGenerativeAI;
     private model: GenerativeModel;
     private modelName: string = 'gemini-1.5-flash';
+    private embeddingModel: GenerativeModel;
 
     constructor(apiKey?: string) {
         const key = apiKey || process.env.GEMINI_API_KEY;
@@ -67,12 +66,27 @@ export class GeminiService {
         }
         this.genAI = new GoogleGenerativeAI(key);
         this.model = this.genAI.getGenerativeModel({ model: this.modelName });
+        this.embeddingModel = this.genAI.getGenerativeModel({ model: "text-embedding-004" });
+    }
+
+    /**
+     * テキストのEmbeddingを取得
+     */
+    async generateEmbedding(text: string): Promise<number[]> {
+        try {
+            const result = await this.embeddingModel.embedContent(text);
+            const embedding = result.embedding;
+            return embedding.values;
+        } catch (error) {
+            console.error('Embedding generation error:', error);
+            throw error;
+        }
     }
 
     /**
      * 自然言語での質問に回答
      */
-    async query(question: string, context?: CompanyContext): Promise<AIResponse> {
+    async query(userMessage: string, context?: CompanyContext): Promise<AIResponse> {
         // コンテキストがない場合は空のコンテキストを作成
         const currentContext = context || {
             companyInfo: { name: 'サンプル株式会社', industry: 'IT', description: '' },
@@ -81,32 +95,38 @@ export class GeminiService {
             relevantPolicies: []
         };
 
-        const systemPrompt = this.buildSystemPrompt(currentContext);
-        const prompt = `${systemPrompt}
-        
-${currentContext.relevantArticles.length > 0 ? '【重要：以下の追加ナレッジも考慮してください】\n' + currentContext.relevantArticles.map(a => `${a.title}: ${a.content}`).join('\n\n') : ''}
+        let prompt = '';
+        // ナレッジベース検索（コンテキストがある場合）
+        if (currentContext.relevantArticles && currentContext.relevantArticles.length > 0) {
+            prompt += `【重要：以下の追加ナレッジも考慮してください】\n` + currentContext.relevantArticles.map(a => `${a.title}: ${a.content}`).join('\n\n') + '\n\n';
+        }
 
-ユーザーの質問: ${question}
-
-社内情報を参考に、丁寧かつ具体的に回答してください。ナレッジに基づいて回答した場合は、どの資料を参考にしたかも明記してください。`;
+        prompt += `ユーザーの質問: ${userMessage}\n\n社内情報を参考に、丁寧かつ具体的に回答してください。ナレッジに基づいて回答した場合は、どの資料を参考にしたかも明記してください。`;
 
         try {
             const result = await this.model.generateContent(prompt);
             const response = result.response;
             const text = response.text();
 
+            // レスポンスの生成
             return {
-                answer: text,
-                sources: currentContext.relevantArticles.map(a => a.title) || [],
-                confidence: 85,
-                suggestedQuestions: await this.generateFollowUpQuestions(question, text),
+                content: text,
+                sources: currentContext.relevantArticles?.map(a => ({
+                    title: a.title,
+                    url: a.sourceUrl
+                })) || [],
+                relatedQuestions: [] // 将来的にはAIに生成させる
             };
         } catch (error: any) {
             console.error('Gemini API Error details:', error);
+            let errorMessage = 'AIからの回答取得に失敗しました。詳細: ' + (error.message || '不明なエラー');
             if (error.status === 429) {
-                throw new Error('AIの利用制限（1日の回数上限など）に達しました。しばらく時間を置いてから再度お試しください。');
+                errorMessage = 'AIの利用制限（1日の回数上限など）に達しました。しばらく時間を置いてから再度お試しください。';
             }
-            throw new Error('AIからの回答取得に失敗しました。詳細: ' + (error.message || '不明なエラー'));
+            return {
+                content: errorMessage,
+                sources: []
+            };
         }
     }
 
@@ -366,17 +386,16 @@ ${JSON.stringify(memberInfo, null, 2)}
 業種: ${context.companyInfo.industry}
 概要: ${context.companyInfo.description}`;
 
-            if (context.relevantArticles.length > 0) {
-                prompt += `\n\n【関連ナレッジ】\n`;
+            if (context.relevantArticles && context.relevantArticles.length > 0) {
+                prompt += `\nRelevant Knowledge Articles:\n`;
                 context.relevantArticles.forEach(article => {
-                    prompt += `- ${article.title}: ${article.summary}\n`;
+                    prompt += `- Title: ${article.title}\n  Source: ${article.sourceUrl || 'N/A'}\n  Content: ${article.content.substring(0, 500)}...\n`;
                 });
             }
-
-            if (context.relevantFAQs.length > 0) {
-                prompt += `\n\n【関連FAQ】\n`;
-                context.relevantFAQs.forEach(faq => {
-                    prompt += `Q: ${faq.question}\nA: ${faq.answer}\n\n`;
+            if (context.relevantFAQs && context.relevantFAQs.length > 0) {
+                prompt += `\nRelevant FAQs:\n`;
+                context.relevantFAQs.forEach((faq: any) => {
+                    prompt += `- Q: ${faq.question}\n  A: ${faq.answer}\n`;
                 });
             }
         }

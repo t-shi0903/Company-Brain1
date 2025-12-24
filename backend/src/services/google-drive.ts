@@ -6,18 +6,28 @@ export class GoogleDriveService {
     private drive;
 
     constructor() {
-        const KEY_FILE = path.join(__dirname, '../../config/google-service-account.json');
+        // クラウド環境（環境変数）またはローカル（ファイル）から認証情報を取得
+        if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+            const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+            const auth = new google.auth.GoogleAuth({
+                credentials,
+                scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+            });
+            this.drive = google.drive({ version: 'v3', auth });
+        } else {
+            const KEY_FILE = path.join(__dirname, '../../config/google-service-account.json');
 
-        if (!fs.existsSync(KEY_FILE)) {
-            throw new Error(`認証ファイルが見つかりません: ${KEY_FILE}`);
+            if (!fs.existsSync(KEY_FILE)) {
+                // 開発環境でもファイルがない場合は警告（ただしクラウドデプロイ時は環境変数があればOK）
+                console.warn(`認証ファイルが見つかりません: ${KEY_FILE}`);
+            }
+
+            const auth = new google.auth.GoogleAuth({
+                keyFile: KEY_FILE,
+                scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+            });
+            this.drive = google.drive({ version: 'v3', auth });
         }
-
-        const auth = new google.auth.GoogleAuth({
-            keyFile: KEY_FILE,
-            scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-        });
-
-        this.drive = google.drive({ version: 'v3', auth });
     }
 
     /**
@@ -27,7 +37,7 @@ export class GoogleDriveService {
         try {
             const response = await this.drive.files.list({
                 q: `'${folderId}' in parents and trashed = false`,
-                fields: 'files(id, name, mimeType, modifiedTime)',
+                fields: 'files(id, name, mimeType, modifiedTime, webViewLink)',
             });
             return response.data.files || [];
         } catch (error) {
@@ -37,15 +47,29 @@ export class GoogleDriveService {
     }
 
     /**
-     * ファイルのコンテンツを取得する (テキスト/PDF/Word等)
+     * ファイルのコンテンツを取得する (テキスト/PDF/Word/Excel/PPT等)
      */
     async getFileContent(fileId: string, mimeType: string): Promise<Buffer> {
         try {
             if (mimeType === 'application/vnd.google-apps.document') {
-                // Googleドキュメントの場合はPDFとしてエクスポート
+                // Googleドキュメント -> PDF
                 const res = await this.drive.files.export({
                     fileId,
                     mimeType: 'application/pdf',
+                }, { responseType: 'arraybuffer' });
+                return Buffer.from(res.data as ArrayBuffer);
+            } else if (mimeType === 'application/vnd.google-apps.spreadsheet') {
+                // Googleスプレッドシート -> Excel (xlsx)
+                const res = await this.drive.files.export({
+                    fileId,
+                    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                }, { responseType: 'arraybuffer' });
+                return Buffer.from(res.data as ArrayBuffer);
+            } else if (mimeType === 'application/vnd.google-apps.presentation') {
+                // Googleスライド -> PowerPoint (pptx)
+                const res = await this.drive.files.export({
+                    fileId,
+                    mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
                 }, { responseType: 'arraybuffer' });
                 return Buffer.from(res.data as ArrayBuffer);
             } else {

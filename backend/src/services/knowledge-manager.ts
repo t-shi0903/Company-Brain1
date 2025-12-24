@@ -1,50 +1,73 @@
-import fs from 'fs/promises';
 import path from 'path';
 import mammoth from 'mammoth';
 import pdf from 'pdf-parse';
+import * as xlsx from 'xlsx';
+import * as officeParser from 'officeparser';
+import { Storage } from '@google-cloud/storage';
 import { KnowledgeArticle, KnowledgeCategory } from '../types';
+import fs from 'fs/promises'; // 一時ファイル用
 
 export class KnowledgeManager {
-    private knowledgeDir: string;
+    private storage: Storage;
+    private bucketName: string;
+    private readonly BUCKET_NAME = 'company-brain-knowledge-163266853240';
 
     constructor() {
-        this.knowledgeDir = path.join(__dirname, '../../data/knowledge');
-        this.ensureDir();
-    }
-
-    private async ensureDir() {
-        try {
-            await fs.mkdir(this.knowledgeDir, { recursive: true });
-        } catch (error) {
-            console.error('Directory creation error:', error);
-        }
+        this.storage = new Storage();
+        this.bucketName = this.BUCKET_NAME;
     }
 
     /**
      * 内容を抽出してナレッジとして保存する
      */
-    async processAndSave(fileName: string, content: Buffer, mimeType: string): Promise<KnowledgeArticle> {
+    async processAndSave(fileName: string, content: Buffer, mimeType: string, sourceUrl?: string): Promise<KnowledgeArticle> {
         let text = '';
 
-        if (mimeType === 'application/pdf') {
-            const data = await pdf(content);
-            text = data.text;
-        } else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-            const result = await mammoth.extractRawText({ buffer: content });
-            text = result.value;
-        } else if (mimeType.startsWith('text/')) {
-            text = content.toString('utf-8');
-        } else {
-            // 解析不能な場合はとりあえず空文字（PDF等に変換済みの場合を想定）
-            text = `[Content from ${fileName}]`;
+        try {
+            if (mimeType === 'application/pdf') {
+                const data = await pdf(content);
+                text = data.text;
+            } else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+                const result = await mammoth.extractRawText({ buffer: content });
+                text = result.value;
+            } else if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+                // Excel
+                const workbook = xlsx.read(content, { type: 'buffer' });
+                text = workbook.SheetNames.map(sheetName => {
+                    const sheet = workbook.Sheets[sheetName];
+                    return xlsx.utils.sheet_to_txt(sheet);
+                }).join('\n\n');
+            } else if (mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+                // PPTX: 一時ファイルを使用する必要があるため、/tmp (Cloud Run等のRead-Write領域) を使用
+                const tempPath = path.join('/tmp', `temp-${Date.now()}.pptx`);
+                try {
+                    await fs.writeFile(tempPath, content);
+                    text = await new Promise<string>((resolve, reject) => {
+                        officeParser.parseOffice(tempPath, (data: string, err: any) => {
+                            if (err) reject(err);
+                            else resolve(data);
+                        });
+                    });
+                } finally {
+                    await fs.unlink(tempPath).catch(() => { });
+                }
+            } else if (mimeType.startsWith('text/')) {
+                text = content.toString('utf-8');
+            } else {
+                text = `[Content from ${fileName}]`;
+            }
+        } catch (error) {
+            console.error(`Error parsing file ${fileName}:`, error);
+            text = `[Error extracting content from ${fileName}]`;
         }
 
         const article: KnowledgeArticle = {
             id: `k-${Date.now()}`,
             title: fileName,
             content: text,
-            summary: text.substring(0, 200), // 簡易的な要約
+            summary: text.substring(0, 200),
             sourceType: 'google_drive',
+            sourceUrl: sourceUrl,
             category: 'technical' as KnowledgeCategory,
             tags: [],
             status: 'published',
@@ -57,26 +80,56 @@ export class KnowledgeManager {
             attachments: []
         };
 
-        const filePath = path.join(this.knowledgeDir, `${article.id}.json`);
-        await fs.writeFile(filePath, JSON.stringify(article, null, 2));
+        // GCSに保存
+        await this.saveToGCS(article);
 
         return article;
     }
 
-    /**
-     * すべてのナレッジを取得する
-     */
-    async getAllKnowledge(): Promise<KnowledgeArticle[]> {
-        const files = await fs.readdir(this.knowledgeDir);
-        const articles: KnowledgeArticle[] = [];
+    private async saveToGCS(article: KnowledgeArticle) {
+        try {
+            const bucket = this.storage.bucket(this.bucketName);
+            const file = bucket.file(`${article.id}.json`);
 
-        for (const file of files) {
-            if (file.endsWith('.json')) {
-                const content = await fs.readFile(path.join(this.knowledgeDir, file), 'utf-8');
-                articles.push(JSON.parse(content));
-            }
+            await file.save(JSON.stringify(article, null, 2), {
+                contentType: 'application/json',
+                metadata: {
+                    cacheControl: 'no-cache',
+                },
+            });
+            console.log(`Saved article ${article.id} to GCS bucket ${this.bucketName}`);
+        } catch (error) {
+            console.error('Error saving to GCS:', error);
+            // エラー時はログに出すのみ（処理は続行）
         }
+    }
 
-        return articles;
+    // 全記事取得（GCSから）
+    async getAllKnowledge(): Promise<KnowledgeArticle[]> {
+        try {
+            const bucket = this.storage.bucket(this.bucketName);
+            const [files] = await bucket.getFiles();
+
+            const articles: KnowledgeArticle[] = [];
+
+            // 並列でダウンロード（数が多い場合は制限が必要だが現状は簡易実装）
+            await Promise.all(files.map(async (file) => {
+                if (file.name.endsWith('.json')) {
+                    try {
+                        const [content] = await file.download();
+                        const article = JSON.parse(content.toString());
+                        articles.push(article);
+                    } catch (e) {
+                        console.error(`Failed to load ${file.name}`, e);
+                    }
+                }
+            }));
+
+            return articles;
+        } catch (error) {
+            console.error('Error listing articles from GCS:', error);
+            return [];
+        }
     }
 }
+
