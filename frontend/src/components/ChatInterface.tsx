@@ -58,7 +58,10 @@ function ChatInterface() {
                 body: JSON.stringify({ question }),
             });
 
-            if (!response.ok) throw new Error('API error');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'API error');
+            }
 
             const data = await response.json();
 
@@ -72,12 +75,20 @@ function ChatInterface() {
             };
 
             setMessages(prev => [...prev, assistantMessage]);
-        } catch (error) {
+        } catch (error: any) {
             // APIエラー時のフォールバック
+            let errorContent = 'すみません、現在AIサービスに一時的な問題が発生しています。';
+
+            if (error.message.includes('回答取得に失敗しました') || error.message.includes('API error')) {
+                errorContent = 'すみません、現在AIの利用制限（1日の回数上限など）に達している可能性があります。\nしばらく時間を置いてから再度お試しください。';
+            } else {
+                errorContent = `エラーが発生しました: ${error.message}\n\nバックエンドサーバーが起動していることを確認してください。`;
+            }
+
             const fallbackMessage: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: 'すみません、現在AIサービスに接続できません。\n\nバックエンドサーバーが起動していることを確認してください。\n\n```\ncd backend\nnpm install\nnpm run dev\n```',
+                content: errorContent,
                 timestamp: new Date(),
             };
             setMessages(prev => [...prev, fallbackMessage]);

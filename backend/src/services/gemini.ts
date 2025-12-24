@@ -58,7 +58,7 @@ export interface ResourceSuggestion {
 export class GeminiService {
     private genAI: GoogleGenerativeAI;
     private model: GenerativeModel;
-    private modelName: string = 'gemini-flash-latest';
+    private modelName: string = 'gemini-1.5-flash';
 
     constructor(apiKey?: string) {
         const key = apiKey || process.env.GEMINI_API_KEY;
@@ -73,12 +73,22 @@ export class GeminiService {
      * 自然言語での質問に回答
      */
     async query(question: string, context?: CompanyContext): Promise<AIResponse> {
-        const systemPrompt = this.buildSystemPrompt(context);
+        // コンテキストがない場合は空のコンテキストを作成
+        const currentContext = context || {
+            companyInfo: { name: 'サンプル株式会社', industry: 'IT', description: '' },
+            relevantArticles: [],
+            relevantFAQs: [],
+            relevantPolicies: []
+        };
+
+        const systemPrompt = this.buildSystemPrompt(currentContext);
         const prompt = `${systemPrompt}
+        
+${currentContext.relevantArticles.length > 0 ? '【重要：以下の追加ナレッジも考慮してください】\n' + currentContext.relevantArticles.map(a => `${a.title}: ${a.content}`).join('\n\n') : ''}
 
 ユーザーの質問: ${question}
 
-上記の社内情報を参考に、丁寧かつ具体的に回答してください。回答は日本語で行ってください。`;
+社内情報を参考に、丁寧かつ具体的に回答してください。ナレッジに基づいて回答した場合は、どの資料を参考にしたかも明記してください。`;
 
         try {
             const result = await this.model.generateContent(prompt);
@@ -87,13 +97,16 @@ export class GeminiService {
 
             return {
                 answer: text,
-                sources: context?.relevantArticles.map(a => a.title) || [],
+                sources: currentContext.relevantArticles.map(a => a.title) || [],
                 confidence: 85,
                 suggestedQuestions: await this.generateFollowUpQuestions(question, text),
             };
-        } catch (error) {
-            console.error('Gemini API Error:', error);
-            throw new Error('AIからの回答取得に失敗しました。');
+        } catch (error: any) {
+            console.error('Gemini API Error details:', error);
+            if (error.status === 429) {
+                throw new Error('AIの利用制限（1日の回数上限など）に達しました。しばらく時間を置いてから再度お試しください。');
+            }
+            throw new Error('AIからの回答取得に失敗しました。詳細: ' + (error.message || '不明なエラー'));
         }
     }
 

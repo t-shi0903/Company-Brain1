@@ -29,11 +29,22 @@ interface Project {
     deadline: string;
 }
 
+interface KnowledgeArticle {
+    id: string;
+    title: string;
+    summary: string;
+    category: string;
+    updatedAt: string;
+}
+
 function AdminPanel() {
     const [members, setMembers] = useState<Member[]>([]);
     const [projects, setProjects] = useState<Project[]>([]);
-    const [activeTab, setActiveTab] = useState<'members' | 'projects'>('projects');
+    const [knowledge, setKnowledge] = useState<KnowledgeArticle[]>([]);
+    const [activeTab, setActiveTab] = useState<'members' | 'projects' | 'knowledge'>('projects');
     const [isLoading, setIsLoading] = useState(true);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const [folderId, setFolderId] = useState('');
 
     const [editingMember, setEditingMember] = useState<Partial<Member> | null>(null);
     const [editingProject, setEditingProject] = useState<Partial<Project> | null>(null);
@@ -45,16 +56,44 @@ function AdminPanel() {
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            const [mRes, pRes] = await Promise.all([
+            const [mRes, pRes, kRes] = await Promise.all([
                 fetch('/api/members'),
-                fetch('/api/projects')
+                fetch('/api/projects'),
+                fetch('/api/knowledge')
             ]);
-            if (mRes.ok) setMembers(await mRes.ok ? await mRes.json() : []);
-            if (pRes.ok) setProjects(await pRes.ok ? await pRes.json() : []);
+            if (mRes.ok) setMembers(await mRes.json());
+            if (pRes.ok) setProjects(await pRes.json());
+            if (kRes.ok) setKnowledge(await kRes.json());
         } catch (error) {
             console.error('Fetch error:', error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleSyncDrive = async () => {
+        if (!folderId) {
+            alert('Google DriveのフォルダIDを入力してください');
+            return;
+        }
+        setIsSyncing(true);
+        try {
+            const res = await fetch('/api/sync-drive', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ folderId })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(`${data.syncedCount}件のドキュメントを同期しました`);
+                fetchData();
+            } else {
+                alert('同期に失敗しました: ' + data.error);
+            }
+        } catch (error) {
+            alert('通信エラーが発生しました');
+        } finally {
+            setIsSyncing(false);
         }
     };
 
@@ -92,7 +131,7 @@ function AdminPanel() {
         }
     };
 
-    const handleDelete = async (type: 'members' | 'projects', id: string) => {
+    const handleDelete = async (type: string, id: string) => {
         if (!confirm('本当に削除しますか？')) return;
         try {
             const res = await fetch(`/api/${type}/${id}`, { method: 'DELETE' });
@@ -119,16 +158,21 @@ function AdminPanel() {
                 >
                     メンバー管理
                 </button>
+                <button
+                    className={`tab-btn ${activeTab === 'knowledge' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('knowledge')}
+                >
+                    ナレッジ同期
+                </button>
             </div>
 
             <div className="admin-content glass">
-                {activeTab === 'projects' ? (
+                {activeTab === 'projects' && (
                     <div className="management-section">
                         <div className="section-header">
                             <h2>プロジェクト一覧</h2>
                             <button className="add-btn" onClick={() => setEditingProject({})}>+ 新規プロジェクト</button>
                         </div>
-
                         <div className="admin-list">
                             {projects.map(p => (
                                 <div key={p.id} className="admin-list-item">
@@ -143,7 +187,6 @@ function AdminPanel() {
                                 </div>
                             ))}
                         </div>
-
                         {editingProject && (
                             <div className="modal">
                                 <form className="admin-form glass" onSubmit={handleSaveProject}>
@@ -190,13 +233,14 @@ function AdminPanel() {
                             </div>
                         )}
                     </div>
-                ) : (
+                )}
+
+                {activeTab === 'members' && (
                     <div className="management-section">
                         <div className="section-header">
                             <h2>メンバー一覧</h2>
                             <button className="add-btn" onClick={() => setEditingMember({})}>+ メンバー追加</button>
                         </div>
-
                         <div className="admin-list">
                             {members.map(m => (
                                 <div key={m.id} className="admin-list-item">
@@ -211,7 +255,6 @@ function AdminPanel() {
                                 </div>
                             ))}
                         </div>
-
                         {editingMember && (
                             <div className="modal">
                                 <form className="admin-form glass" onSubmit={handleSaveMember}>
@@ -248,6 +291,48 @@ function AdminPanel() {
                                 </form>
                             </div>
                         )}
+                    </div>
+                )}
+
+                {activeTab === 'knowledge' && (
+                    <div className="management-section">
+                        <div className="section-header">
+                            <h2>Google Drive同期</h2>
+                        </div>
+                        <div className="sync-controls glass" style={{ padding: '1.5rem', marginBottom: '2rem', display: 'flex', gap: '1rem' }}>
+                            <input
+                                type="text"
+                                placeholder="Google Drive フォルダID"
+                                value={folderId}
+                                onChange={e => setFolderId(e.target.value)}
+                                style={{ flex: 1, padding: '0.8rem', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
+                            />
+                            <button
+                                className="save-btn"
+                                onClick={handleSyncDrive}
+                                disabled={isSyncing}
+                                style={{ minWidth: '150px' }}
+                            >
+                                {isSyncing ? '同期中...' : '今すぐ同期'}
+                            </button>
+                        </div>
+
+                        <div className="section-header">
+                            <h3>同期済みナレッジ ({knowledge.length}件)</h3>
+                        </div>
+                        <div className="admin-list">
+                            {knowledge.map(k => (
+                                <div key={k.id} className="admin-list-item">
+                                    <div className="item-info">
+                                        <strong>{k.title}</strong>
+                                        <span style={{ fontSize: '0.8rem' }}>{k.summary.substring(0, 50)}...</span>
+                                    </div>
+                                    <div className="item-actions">
+                                        <span>{new Date(k.updatedAt).toLocaleDateString()}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>

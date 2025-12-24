@@ -7,6 +7,10 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+
+// 環境変数の読み込みを最初に行う
+dotenv.config();
+
 import {
     Member,
     Project,
@@ -15,11 +19,8 @@ import {
     CompanyContext,
     ProjectRequirement,
 } from './types';
-import { getGeminiService } from './services';
-import { StorageService } from './services/storage';
-
-// 環境変数の読み込み
-dotenv.config();
+import { getGeminiService, getGoogleDriveService, getKnowledgeManager, StorageService } from './services';
+import { analyzeProject, detectRisk, parseDocument } from './services/ai';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -213,7 +214,23 @@ app.post('/api/chat', async (req: Request, res: Response) => {
         }
 
         const gemini = getGeminiService();
-        const response = await gemini.query(question, companyContext);
+        const knowledgeManager = getKnowledgeManager();
+
+        // ナレッジを検索（現在は全検索だが、将来的にはベクトル検索等にアップグレード可能）
+        const allKnowledge = await knowledgeManager.getAllKnowledge();
+
+        // 簡易的なキーワードマッチングによる関連度の高いナレッジの抽出
+        const relevantArticles = allKnowledge.filter(article =>
+            question.split('').some((char: string) => article.content.includes(char)) ||
+            article.title.includes(question)
+        ).slice(0, 3); // 上位3件
+
+        const context: CompanyContext = {
+            ...companyContext,
+            relevantArticles: relevantArticles
+        };
+
+        const response = await gemini.query(question, context);
 
         res.json(response);
     } catch (error) {
@@ -326,20 +343,55 @@ app.get('/api/risks', async (req: Request, res: Response) => {
  * ドキュメントを解析
  */
 app.post('/api/parse-document', async (req: Request, res: Response) => {
-    try {
-        const { content, type } = req.body;
+    // ...
+});
 
-        if (!content) {
-            return res.status(400).json({ error: 'ドキュメント内容を指定してください' });
+/**
+ * Google Driveとの同期を実行
+ */
+app.post('/api/sync-drive', async (req: Request, res: Response) => {
+    try {
+        const { folderId } = req.body;
+        if (!folderId) {
+            return res.status(400).json({ error: 'フォルダIDを指定してください' });
         }
 
-        const gemini = getGeminiService();
-        const extracted = await gemini.extractFromDocument(content, type || 'text');
+        const driveService = getGoogleDriveService();
+        const knowledgeManager = getKnowledgeManager();
 
-        res.json(extracted);
+        console.log(`[DriveSync] Starting sync for folder: ${folderId}`);
+        const files = await driveService.listFiles(folderId);
+        console.log(`[DriveSync] Found ${files.length} files in Drive`);
+
+        const results = [];
+
+        for (const file of files) {
+            console.log(`[DriveSync] Processing file: ${file.name} (${file.mimeType})`);
+            if (file.id && file.name && file.mimeType) {
+                const content = await driveService.getFileContent(file.id, file.mimeType);
+                const article = await knowledgeManager.processAndSave(file.name, content, file.mimeType);
+                results.push(article);
+            }
+        }
+
+        console.log(`[DriveSync] Sync finished. Count: ${results.length}`);
+        res.json({ success: true, syncedCount: results.length, articles: results });
     } catch (error) {
-        console.error('Parse error:', error);
-        res.status(500).json({ error: 'ドキュメント解析に失敗しました' });
+        console.error('Sync error:', error);
+        res.status(500).json({ error: 'Google Driveとの同期に失敗しました。認証ファイルを確認してください。' });
+    }
+});
+
+/**
+ * 全てのナレッジを取得
+ */
+app.get('/api/knowledge', async (req: Request, res: Response) => {
+    try {
+        const knowledgeManager = getKnowledgeManager();
+        const articles = await knowledgeManager.getAllKnowledge();
+        res.json(articles);
+    } catch (error) {
+        res.status(500).json({ error: 'ナレッジの取得に失敗しました' });
     }
 });
 

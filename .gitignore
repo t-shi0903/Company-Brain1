@@ -29,3 +29,14 @@ coverage/
 
 # その他
 *.tsbuildinfo
+
+# 機密情報・個別設定
+backend/config/google-service-account.json
+backend/.env
+
+# ローカルデータ
+backend/data/knowledge/
+backend/data/*.json
+!backend/data/projects.json
+!backend/data/members.json
+!backend/data/faq.json

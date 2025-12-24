@@ -3,5 +3,15 @@
  */
 
 export * from './gemini';
-export * from './document-parser';
+export * from './ai';
 export * from './storage';
+export * from './google-drive';
+export * from './knowledge-manager';
+
+import { GeminiService } from './gemini';
+import { GoogleDriveService } from './google-drive';
+import { KnowledgeManager } from './knowledge-manager';
+
+export const getGeminiService = () => new GeminiService();
+export const getGoogleDriveService = () => new GoogleDriveService();
+export const getKnowledgeManager = () => new KnowledgeManager();

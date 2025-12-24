@@ -27,6 +27,8 @@ export interface KnowledgeArticle {
     content: string;
     /** 要約（AI生成または手動） */
     summary: string;
+    /** 情報源タイプ */
+    sourceType?: 'google_drive' | 'manual' | 'file_upload';
     /** カテゴリ */
     category: KnowledgeCategory;
     /** タグ */
