@@ -7,7 +7,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { GeminiService, getGeminiService, createDocumentParser } from './services';
 import {
     Member,
     Project,
@@ -16,6 +15,8 @@ import {
     CompanyContext,
     ProjectRequirement,
 } from './types';
+import { getGeminiService } from './services';
+import { StorageService } from './services/storage';
 
 // 環境変数の読み込み
 dotenv.config();
@@ -27,7 +28,11 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// サンプルデータ（実際はデータベースから取得）
+// データの動的管理
+let members: Member[] = [];
+let projects: Project[] = [];
+
+// サンプルデータ（初期化用）
 const sampleMembers: Member[] = [
     {
         id: 'm1',
@@ -111,19 +116,6 @@ const sampleProjects: Project[] = [
                 actualHours: 40,
                 createdAt: new Date(),
             },
-            {
-                id: 't2',
-                title: 'バックエンドAPI開発',
-                description: 'Express/Node.jsによるAPI開発',
-                assigneeId: 'm1',
-                status: 'done',
-                priority: 'high',
-                dueDate: new Date('2026-01-31'),
-                estimatedHours: 80,
-                actualHours: 75,
-                createdAt: new Date(),
-                completedAt: new Date(),
-            },
         ],
         createdAt: new Date('2025-10-01'),
         updatedAt: new Date(),
@@ -182,6 +174,24 @@ const companyContext: CompanyContext = {
     relevantPolicies: [],
 };
 
+// 初期化ロジック
+async function initData() {
+    members = await StorageService.loadMembers();
+    projects = await StorageService.loadProjects();
+
+    if (members.length === 0) {
+        members = sampleMembers;
+        await StorageService.saveMembers(members);
+    }
+    if (projects.length === 0) {
+        projects = sampleProjects;
+        await StorageService.saveProjects(projects);
+    }
+    console.log('Data initialized from storage');
+}
+
+initData();
+
 // APIエンドポイント
 
 /**
@@ -216,35 +226,64 @@ app.post('/api/chat', async (req: Request, res: Response) => {
  * プロジェクト一覧を取得
  */
 app.get('/api/projects', (req: Request, res: Response) => {
-    res.json(sampleProjects);
+    res.json(projects);
 });
 
 /**
- * プロジェクト進捗を分析
+ * プロジェクトを作成・更新
  */
-app.get('/api/projects/:id/analysis', async (req: Request, res: Response) => {
-    try {
-        const project = sampleProjects.find(p => p.id === req.params.id);
-
-        if (!project) {
-            return res.status(404).json({ error: 'プロジェクトが見つかりません' });
-        }
-
-        const gemini = getGeminiService();
-        const analysis = await gemini.analyzeProjectProgress(project);
-
-        res.json(analysis);
-    } catch (error) {
-        console.error('Analysis error:', error);
-        res.status(500).json({ error: 'プロジェクト分析に失敗しました' });
+app.post('/api/projects', async (req: Request, res: Response) => {
+    const project: Project = req.body;
+    const index = projects.findIndex(p => p.id === project.id);
+    if (index >= 0) {
+        projects[index] = { ...project, updatedAt: new Date() };
+    } else {
+        projects.push({ ...project, id: project.id || `p${Date.now()}`, createdAt: new Date(), updatedAt: new Date() });
     }
+    await StorageService.saveProjects(projects);
+    res.json({ success: true, project: projects[index >= 0 ? index : projects.length - 1] });
+});
+
+/**
+ * プロジェクトを削除
+ */
+app.delete('/api/projects/:id', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    projects = projects.filter(p => p.id !== id);
+    await StorageService.saveProjects(projects);
+    res.json({ success: true });
 });
 
 /**
  * 社員一覧を取得
  */
 app.get('/api/members', (req: Request, res: Response) => {
-    res.json(sampleMembers);
+    res.json(members);
+});
+
+/**
+ * 社員を作成・更新
+ */
+app.post('/api/members', async (req: Request, res: Response) => {
+    const member: Member = req.body;
+    const index = members.findIndex(m => m.id === member.id);
+    if (index >= 0) {
+        members[index] = { ...member, updatedAt: new Date() };
+    } else {
+        members.push({ ...member, id: member.id || `m${Date.now()}`, joinedAt: new Date(), updatedAt: new Date() });
+    }
+    await StorageService.saveMembers(members);
+    res.json({ success: true, member: members[index >= 0 ? index : members.length - 1] });
+});
+
+/**
+ * 社員を削除
+ */
+app.delete('/api/members/:id', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    members = members.filter(m => m.id !== id);
+    await StorageService.saveMembers(members);
+    res.json({ success: true });
 });
 
 /**
@@ -259,7 +298,7 @@ app.post('/api/suggest-resource', async (req: Request, res: Response) => {
         }
 
         const gemini = getGeminiService();
-        const suggestion = await gemini.suggestResourceAllocation(requirement, sampleMembers);
+        const suggestion = await gemini.suggestResourceAllocation(requirement, members);
 
         res.json(suggestion);
     } catch (error) {
@@ -274,7 +313,7 @@ app.post('/api/suggest-resource', async (req: Request, res: Response) => {
 app.get('/api/risks', async (req: Request, res: Response) => {
     try {
         const gemini = getGeminiService();
-        const alerts = await gemini.detectRisks(sampleMembers, sampleProjects);
+        const alerts = await gemini.detectRisks(members, projects);
 
         res.json(alerts);
     } catch (error) {

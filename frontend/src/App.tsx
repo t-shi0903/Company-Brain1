@@ -1,12 +1,22 @@
 import { useState } from 'react';
 import ChatInterface from './components/ChatInterface';
 import Dashboard from './components/Dashboard';
+import AdminPanel from './components/AdminPanel';
 import './App.css';
 
-type View = 'chat' | 'dashboard';
+type View = 'chat' | 'dashboard' | 'admin';
 
 function App() {
     const [activeView, setActiveView] = useState<View>('chat');
+
+    const renderView = () => {
+        switch (activeView) {
+            case 'chat': return <ChatInterface />;
+            case 'dashboard': return <Dashboard />;
+            case 'admin': return <AdminPanel />;
+            default: return <ChatInterface />;
+        }
+    };
 
     return (
         <div className="app">
@@ -50,13 +60,23 @@ function App() {
                             </svg>
                             ダッシュボード
                         </button>
+                        <button
+                            className={`nav-btn ${activeView === 'admin' ? 'active' : ''}`}
+                            onClick={() => setActiveView('admin')}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                            </svg>
+                            管理
+                        </button>
                     </nav>
                 </div>
             </header>
 
             {/* メインコンテンツ */}
             <main className="main">
-                {activeView === 'chat' ? <ChatInterface /> : <Dashboard />}
+                {renderView()}
             </main>
 
             {/* フッター */}
