@@ -1,53 +1,20 @@
 [
   {
-    "id": "p1",
-    "name": "新規Webサービス開発",
-    "description": "社内業務効率化のためのWebアプリケーション開発プロジェクト",
-    "category": "Web開発",
-    "startDate": "2025-10-01T00:00:00.000Z",
-    "deadline": "2026-03-31T00:00:00.000Z",
-    "assignees": [
-      "m1",
-      "m2"
-    ],
-    "managerId": "m1",
+    "id": "new_1766883555032",
+    "name": "<ソフトウェアサービスを一つ世の中に公開 しよう!!>",
     "status": "in_progress",
-    "progressPercent": 45,
-    "relatedDocuments": [],
-    "tasks": [
-      {
-        "id": "t1",
-        "title": "フロントエンド実装",
-        "description": "Reactによるフロントエンド開発",
-        "assigneeId": "m1",
-        "status": "in_progress",
-        "priority": "high",
-        "dueDate": "2026-02-28T00:00:00.000Z",
-        "estimatedHours": 120,
-        "actualHours": 40,
-        "createdAt": "2025-12-24T02:44:13.251Z"
-      }
-    ],
-    "createdAt": "2025-10-01T00:00:00.000Z",
-    "updatedAt": "2025-12-24T02:44:13.251Z"
-  },
-  {
-    "id": "p2",
-    "name": "デザインリニューアル",
-    "description": "コーポレートサイトのデザイン刷り直し",
-    "category": "デザイン",
-    "startDate": "2025-12-01T00:00:00.000Z",
-    "deadline": "2026-01-15T00:00:00.000Z",
-    "assignees": [
-      "m2",
-      "m3"
-    ],
-    "managerId": "m2",
-    "status": "in_progress",
-    "progressPercent": 20,
-    "relatedDocuments": [],
+    "progress": 91,
+    "progressPercent": 91,
+    "deadline": "2026-01-04",
+    "assignees": [],
+    "description": "概要",
     "tasks": [],
-    "createdAt": "2025-12-01T00:00:00.000Z",
-    "updatedAt": "2025-12-24T02:44:13.251Z"
+    "category": "General",
+    "startDate": "2025-12-28T00:59:15.032Z",
+    "managerId": "me",
+    "relatedDocuments": [],
+    "createdAt": "2025-12-28T00:59:42.869Z",
+    "updatedAt": "2025-12-28T00:59:42.869Z",
+    "title": "<ソフトウェアサービスを一つ世の中に公開 しよう!!>"
   }
 ]

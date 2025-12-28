@@ -1,3 +1,5 @@
+import { Department } from './index';
+
 /**
  * Company Brain - ナレッジ（Knowledge）データ型定義
  * 
@@ -28,7 +30,7 @@ export interface KnowledgeArticle {
     /** 要約（AI生成または手動） */
     summary: string;
     /** 情報源の種類 (google_drive, slack, manual等) */
-    sourceType: 'google_drive' | 'slack' | 'manual';
+    sourceType: 'google_drive' | 'slack' | 'manual' | 'upload';
     /** 情報源のURL (Google Driveのリンク等) */
     sourceUrl?: string;
     /** カテゴリ */
@@ -51,6 +53,8 @@ export interface KnowledgeArticle {
     relatedArticleIds: string[];
     /** 添付ファイル */
     attachments: KnowledgeAttachment[];
+    /** 閲覧許可部署（空の場合は全社） */
+    allowedDepartments: Department[];
 }
 
 /** 添付ファイル */

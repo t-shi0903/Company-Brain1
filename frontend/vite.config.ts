@@ -8,8 +8,14 @@ export default defineConfig(({ mode }) => {
         plugins: [react()],
         server: {
             port: 5173,
+            strictPort: true,
             proxy: {
                 '/api': {
+                    target: env.VITE_BACKEND_URL || 'http://localhost:3001',
+                    changeOrigin: true,
+                    secure: false,
+                },
+                '/uploads': {
                     target: env.VITE_BACKEND_URL || 'http://localhost:3001',
                     changeOrigin: true,
                     secure: false,

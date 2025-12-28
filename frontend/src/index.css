@@ -77,7 +77,9 @@
   box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   min-height: 100vh;
 }
 
@@ -119,28 +121,63 @@ body {
 
 /* アニメーション */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(-20px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 @keyframes glow {
-  0%, 100% { box-shadow: 0 0 5px var(--color-primary-400), 0 0 10px var(--color-primary-500); }
-  50% { box-shadow: 0 0 10px var(--color-primary-400), 0 0 20px var(--color-primary-500); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 5px var(--color-primary-400), 0 0 10px var(--color-primary-500);
+  }
+
+  50% {
+    box-shadow: 0 0 10px var(--color-primary-400), 0 0 20px var(--color-primary-500);
+  }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-5px);
+  }
 }
 
 .animate-fadeIn {
@@ -191,7 +228,8 @@ button:disabled {
 }
 
 /* 入力スタイル */
-input, textarea {
+input,
+textarea {
   font-family: inherit;
   font-size: 1rem;
   background: var(--bg-tertiary);
@@ -202,13 +240,15 @@ input, textarea {
   transition: all var(--transition-normal);
 }
 
-input:focus, textarea:focus {
+input:focus,
+textarea:focus {
   outline: none;
   border-color: var(--color-primary-400);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
 }
 
-input::placeholder, textarea::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--text-muted);
 }
 
@@ -217,4 +257,16 @@ input::placeholder, textarea::placeholder {
   :root {
     font-size: 14px;
   }
+}
+
+.readonly {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+button.disabled,
+.icon-btn-small.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--color-gray-600);
 }

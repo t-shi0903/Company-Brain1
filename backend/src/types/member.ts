@@ -44,8 +44,14 @@ export interface Member {
     department: string;
     /** 役職 */
     position: string;
+    /** 権限ロール (admin | member | guest) */
+    role?: 'admin' | 'member' | 'guest';
+    /** ステータス (approved | pending | rejected) */
+    status?: 'approved' | 'pending' | 'rejected';
     /** プロフィール画像URL */
     avatarUrl?: string;
+    /** Googleプロフィール画像URL（互換性のため） */
+    picture?: string;
     /** スキルセット */
     skills: Skill[];
     /** 現在担当中のプロジェクトID一覧 */
@@ -56,6 +62,16 @@ export interface Member {
     availability: AvailabilitySlot[];
     /** 過去に担当したプロジェクトID一覧 */
     pastProjects: string[];
+    /** 申請日時 */
+    requestedAt?: Date;
+    /** 承認日時 */
+    approvedAt?: Date;
+    /** 承認者 */
+    approvedBy?: string;
+    /** 拒絶日時 */
+    rejectedAt?: Date;
+    /** 拒絶者 */
+    rejectedBy?: string;
     /** 入社日 */
     joinedAt: Date;
     /** 最終更新日時 */

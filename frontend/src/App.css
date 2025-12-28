@@ -55,81 +55,69 @@
 }
 
 /* ヘッダー */
-.header {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    padding: 0.75rem 2rem;
+/* Main transition container */
+.view-transition {
+    animation: fadeIn 0.3s ease-out;
 }
 
-.header-content {
-    max-width: 1400px;
-    margin: 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-.logo {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
+.animate-fadeIn {
+    animation: fadeIn 0.5s ease-out forwards;
 }
 
-.logo-icon {
-    width: 48px;
-    height: 48px;
+.animate-pulse {
+    animation: pulse 2s infinite;
 }
 
-.logo-text h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
 }
 
-.logo-text span {
-    font-size: 0.75rem;
-    color: var(--text-muted);
+/* Glass effect helpers */
+.glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-glass);
 }
 
-.nav {
-    display: flex;
-    gap: 0.5rem;
+.glass-hover:hover {
+    background: var(--bg-secondary);
+    backdrop-filter: blur(16px);
 }
 
-.nav-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.25rem;
-    background: transparent;
-    color: var(--text-secondary);
-    border-radius: 12px;
-    font-weight: 500;
-    font-size: 0.9rem;
-}
-
-.nav-btn:hover {
-    background: rgba(99, 102, 241, 0.1);
-    color: var(--color-primary-300);
-}
-
-.nav-btn.active {
-    background: var(--gradient-primary);
-    color: white;
-    box-shadow: var(--shadow-glow);
-}
 
 /* メイン */
-.main {
+.main-content {
     flex: 1;
     max-width: 1400px;
     width: 100%;
     margin: 0 auto;
     padding: 2rem;
+    animation: fadeIn 0.5s ease-out;
 }
 
 /* フッター */
@@ -138,6 +126,8 @@
     padding: 1.5rem;
     color: var(--text-muted);
     font-size: 0.85rem;
+    border-top: 1px solid var(--border-color);
+    margin-top: auto;
 }
 
 /* レスポンシブ */

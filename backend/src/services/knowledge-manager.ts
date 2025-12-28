@@ -1,4 +1,5 @@
 import path from 'path';
+import os from 'os';
 import mammoth from 'mammoth';
 import pdf from 'pdf-parse';
 import * as xlsx from 'xlsx';
@@ -6,15 +7,37 @@ import * as officeParser from 'officeparser';
 import { Storage } from '@google-cloud/storage';
 import { KnowledgeArticle, KnowledgeCategory } from '../types';
 import fs from 'fs/promises'; // 一時ファイル用
+import { appConfig } from '../config';
 
 export class KnowledgeManager {
     private storage: Storage;
     private bucketName: string;
-    private readonly BUCKET_NAME = 'company-brain-knowledge-163266853240';
 
     constructor() {
         this.storage = new Storage();
-        this.bucketName = this.BUCKET_NAME;
+        this.bucketName = appConfig.storage.bucketName;
+    }
+
+    /**
+     * 既に作成されたナレッジ記事を保存する（公開メソッド）
+     */
+    async saveArticle(article: KnowledgeArticle): Promise<void> {
+        await this.saveToGCS(article);
+    }
+
+    /**
+     * ナレッジ記事を削除する
+     */
+    async deleteArticle(id: string): Promise<void> {
+        try {
+            const bucket = this.storage.bucket(this.bucketName);
+            const file = bucket.file(`${id}.json`);
+            await file.delete();
+            console.log(`Deleted article ${id} from GCS`);
+        } catch (error) {
+            console.error(`Error deleting article ${id} from GCS:`, error);
+            // 既に存在しない場合などは無視してよいが、ログには出しておく
+        }
     }
 
     /**
@@ -38,8 +61,8 @@ export class KnowledgeManager {
                     return xlsx.utils.sheet_to_txt(sheet);
                 }).join('\n\n');
             } else if (mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
-                // PPTX: 一時ファイルを使用する必要があるため、/tmp (Cloud Run等のRead-Write領域) を使用
-                const tempPath = path.join('/tmp', `temp-${Date.now()}.pptx`);
+                // PPTX: 一時ファイルを使用する (OSの一時ディレクトリを使用)
+                const tempPath = path.join(os.tmpdir(), `temp-${Date.now()}.pptx`);
                 try {
                     await fs.writeFile(tempPath, content);
                     text = await new Promise<string>((resolve, reject) => {
@@ -77,7 +100,10 @@ export class KnowledgeManager {
             updatedAt: new Date(),
             viewCount: 0,
             relatedArticleIds: [],
-            attachments: []
+            attachments: [],
+            // デフォルトでは全社公開 (簡易実装)
+            // ファイル名やフォルダ構造に基づいて権限を変えるロジックをここに追加可能
+            allowedDepartments: ['general', 'admin', 'sales', 'engineering']
         };
 
         // GCSに保存

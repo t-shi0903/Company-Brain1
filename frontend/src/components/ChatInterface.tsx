@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import './ChatInterface.css';
+import { SAMPLE_QUESTIONS } from '../config'; // Assuming config.ts exists and exports SAMPLE_QUESTIONS
 
 interface Message {
     id: string;
@@ -10,15 +11,14 @@ interface Message {
     suggestedQuestions?: string[];
 }
 
-const SAMPLE_QUESTIONS = [
-    '〇〇プロジェクトの進捗状況は？',
-    '有給休暇の申請方法を教えてください',
-    'Webデザインができる社員は誰ですか？',
-    '今月の経費精算の締め切りはいつ？',
-    '会社の福利厚生について教えてください',
-];
+interface ChatInterfaceProps {
+    user?: {
+        name: string;
+        picture?: string;
+    } | null;
+}
 
-function ChatInterface() {
+function ChatInterface({ user }: ChatInterfaceProps) {
     const [messages, setMessages] = useState<Message[]>([
         {
             id: '0',
@@ -63,8 +63,26 @@ function ChatInterface() {
             });
 
             if (!response.ok) {
+                if (response.status === 401) {
+                    // トークン期限切れなどの場合
+                    localStorage.removeItem('google_id_token');
+                    alert('セッションの有効期限が切れました。再度ログインしてください。');
+                    window.location.href = '/'; // トップに戻る（リロードはしないが、Appの状態リセットのため遷移はする）
+                    return;
+                }
+
                 const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || 'API error');
+                // 詳細情報があればそれを含める
+                let errorMessage = errorData.error || 'API error';
+
+                // エラーの詳細情報があれば追加
+                if (errorData.content) {
+                    errorMessage = errorData.content;
+                } else if (errorData.details) {
+                    errorMessage += `\n\n${errorData.details}`;
+                }
+
+                throw new Error(errorMessage);
             }
 
             const data = await response.json();
@@ -72,22 +90,17 @@ function ChatInterface() {
             const assistantMessage: Message = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
-                content: data.answer,
+                content: data.content || data.answer || 'すみません、回答を生成できませんでした。',
                 timestamp: new Date(),
-                sources: data.sources,
-                suggestedQuestions: data.suggestedQuestions,
+                sources: data.sources || [],
+                suggestedQuestions: data.relatedQuestions || data.suggestedQuestions || [],
             };
 
             setMessages(prev => [...prev, assistantMessage]);
         } catch (error: any) {
-            // APIエラー時のフォールバック
-            let errorContent = 'すみません、現在AIサービスに一時的な問題が発生しています。';
-
-            if (error.message.includes('回答取得に失敗しました') || error.message.includes('API error')) {
-                errorContent = 'すみません、現在AIの利用制限（1日の回数上限など）に達している可能性があります。\nしばらく時間を置いてから再度お試しください。';
-            } else {
-                errorContent = `エラーが発生しました: ${error.message}\n\nバックエンドサーバーが起動していることを確認してください。`;
-            }
+            // デバッグのため、生のエラーメッセージを表示
+            console.error('Frontend Error:', error);
+            const errorContent = `エラーが発生しました。\n\n${error.message}`;
 
             const fallbackMessage: Message = {
                 id: (Date.now() + 1).toString(),
@@ -122,12 +135,24 @@ function ChatInterface() {
                             {message.role === 'assistant' ? (
                                 <div className="avatar-ai">🧠</div>
                             ) : (
-                                <div className="avatar-user">👤</div>
+                                <div
+                                    className="avatar-user"
+                                    style={{
+                                        backgroundImage: user?.picture ? `url(${user.picture})` : 'none',
+                                        backgroundSize: 'cover',
+                                        backgroundPosition: 'center',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    {!user?.picture && '👤'}
+                                </div>
                             )}
                         </div>
                         <div className="message-content">
                             <div className="message-text">
-                                {message.content.split('\n').map((line, i) => (
+                                {(message.content || '').split('\n').map((line, i) => (
                                     <p key={i}>{line || <br />}</p>
                                 ))}
                             </div>

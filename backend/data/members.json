@@ -1,112 +1,33 @@
 [
   {
-    "id": "m1",
-    "name": "田中太郎",
-    "email": "tanaka@example.com",
-    "department": "エンジニアリング",
-    "position": "シニアエンジニア",
-    "skills": [
-      {
-        "name": "React",
-        "category": "programming",
-        "level": "expert",
-        "yearsOfExperience": 5
-      },
-      {
-        "name": "TypeScript",
-        "category": "programming",
-        "level": "expert",
-        "yearsOfExperience": 4
-      },
-      {
-        "name": "Node.js",
-        "category": "programming",
-        "level": "advanced",
-        "yearsOfExperience": 4
-      },
-      {
-        "name": "GCP",
-        "category": "infrastructure",
-        "level": "intermediate",
-        "yearsOfExperience": 2
-      }
-    ],
-    "currentProjects": [
-      "p1"
-    ],
-    "workloadStatus": "busy",
-    "availability": [],
-    "pastProjects": [
-      "p0"
-    ],
-    "joinedAt": "2019-01-15T00:00:00.000Z",
-    "updatedAt": "2025-12-24T01:54:59.548Z"
-  },
-  {
-    "id": "m2",
-    "name": "佐藤美咲",
-    "email": "sato@example.com",
-    "department": "デザイン",
-    "position": "リードデザイナー",
-    "skills": [
-      {
-        "name": "Figma",
-        "category": "design",
-        "level": "expert",
-        "yearsOfExperience": 5
-      },
-      {
-        "name": "UI/UX",
-        "category": "design",
-        "level": "expert",
-        "yearsOfExperience": 6
-      },
-      {
-        "name": "CSS",
-        "category": "design",
-        "level": "advanced",
-        "yearsOfExperience": 5
-      }
-    ],
-    "currentProjects": [
-      "p1",
-      "p2"
-    ],
-    "workloadStatus": "available",
-    "availability": [],
-    "pastProjects": [
-      "p1"
-    ],
-    "joinedAt": "2021-06-01T00:00:00.000Z",
-    "updatedAt": "2025-12-24T01:54:59.548Z"
-  },
-  {
-    "id": "m3",
-    "name": "鈴木一郎",
-    "email": "suzuki@example.com",
-    "department": "エンジニアリング",
-    "position": "ジュニアエンジニア",
-    "skills": [
-      {
-        "name": "Python",
-        "category": "programming",
-        "level": "intermediate",
-        "yearsOfExperience": 2
-      },
-      {
-        "name": "SQL",
-        "category": "programming",
-        "level": "intermediate",
-        "yearsOfExperience": 2
-      }
-    ],
-    "currentProjects": [
-      "p2"
-    ],
+    "id": "test-user",
+    "name": "Test User",
+    "email": "test@example.com",
+    "department": "general",
+    "position": "Member",
+    "skills": [],
+    "currentProjects": [],
     "workloadStatus": "available",
     "availability": [],
     "pastProjects": [],
-    "joinedAt": "2023-04-01T00:00:00.000Z",
-    "updatedAt": "2025-12-24T01:54:59.548Z"
+    "joinedAt": "2025-12-27T23:01:12.210Z",
+    "updatedAt": "2025-12-27T23:01:12.210Z"
+  },
+  {
+    "id": "100403087345305195031",
+    "name": "野村汰嗣（T-shi）",
+    "email": "miku.0505.itsuki@gmail.com",
+    "department": "general",
+    "position": "Member",
+    "role": "member",
+    "status": "approved",
+    "picture": "/uploads/image-1766881361394-784451381.JPG",
+    "skills": [],
+    "currentProjects": [],
+    "workloadStatus": "moderate",
+    "availability": [],
+    "pastProjects": [],
+    "joinedAt": "2025-12-27T23:13:41.903Z",
+    "updatedAt": "2025-12-28T01:38:10.616Z"
   }
 ]

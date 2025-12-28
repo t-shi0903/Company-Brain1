@@ -1,36 +1,22 @@
 import { useState, useEffect } from 'react';
 import './Dashboard.css';
+import ErrorBoundary from './ErrorBoundary';
+import { ThemeSelector } from './ThemeSelector';
+import { DashboardSkeleton } from './LoadingSkeleton';
 
-interface Project {
-    id: string;
-    name: string;
-    status: string;
-    progressPercent: number;
-    deadline: string;
-    assignees: string[];
-}
-
-interface Member {
-    id: string;
-    name: string;
-    department: string;
-    workloadStatus: string;
-    skills: { name: string; level: string }[];
-    currentProjects: string[];
-}
-
-interface RiskAlert {
-    type: string;
-    severity: string;
-    message: string;
-    detectedAt: string;
-}
+import { ProjectModal } from './ProjectModal';
+import { MemberModal } from './MemberModal';
+import { ReportModal } from './ReportModal';
+import { AIInsights } from './AIInsights';
+import { QuickActions } from './QuickActions';
+import { Project, Member, RiskAlert } from '../types';
 
 // サンプルデータ（APIが利用できない場合のフォールバック）
+// 型に合わせてデータを整形
 const SAMPLE_PROJECTS: Project[] = [
-    { id: 'p1', name: '新規Webサービス開発', status: 'in_progress', progressPercent: 45, deadline: '2025-03-31', assignees: ['m1'] },
-    { id: 'p2', name: 'モバイルアプリリニューアル', status: 'in_progress', progressPercent: 72, deadline: '2025-02-15', assignees: ['m1', 'm2'] },
-    { id: 'p3', name: '社内システム改修', status: 'planning', progressPercent: 15, deadline: '2025-04-30', assignees: ['m2'] },
+    { id: 'p1', name: '新規Webサービス開発', status: 'in_progress', progress: 45, progressPercent: 45, deadline: '2025-03-31', assignees: ['m1'] },
+    { id: 'p2', name: 'モバイルアプリリニューアル', status: 'in_progress', progress: 72, progressPercent: 72, deadline: '2025-02-15', assignees: ['m1', 'm2'] },
+    { id: 'p3', name: '社内システム改修', status: 'planning', progress: 15, progressPercent: 15, deadline: '2025-04-30', assignees: ['m2'] },
 ];
 
 const SAMPLE_MEMBERS: Member[] = [
@@ -43,12 +29,30 @@ const SAMPLE_ALERTS: RiskAlert[] = [
     { type: 'deadline_risk', severity: 'high', message: '「モバイルアプリリニューアル」の期限まで54日ですが、進捗は72%です。', detectedAt: new Date().toISOString() },
 ];
 
-function Dashboard() {
-    const [projects, setProjects] = useState<Project[]>(SAMPLE_PROJECTS);
-    const [members, setMembers] = useState<Member[]>(SAMPLE_MEMBERS);
-    const [alerts, setAlerts] = useState<RiskAlert[]>(SAMPLE_ALERTS);
+interface DashboardProps {
+    onNavigate: (view: 'dashboard' | 'chat' | 'admin') => void;
+    user: {
+        email: string;
+        name: string;
+        picture?: string;
+        role?: 'admin' | 'member' | 'guest';
+    } | null;
+}
+
+function Dashboard({ onNavigate, user }: DashboardProps) {
+    const [projects, setProjects] = useState<Project[]>([]);
+    const [members, setMembers] = useState<Member[]>([]);
+    const [alerts, setAlerts] = useState<RiskAlert[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Modal State
+    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+    const [memberModalOpen, setMemberModalOpen] = useState(false);
+    const [reportModalOpen, setReportModalOpen] = useState(false);
+
+    // ... (fetchData effect is same) ...
+
+    // ... (helper functions getStatusLabel, getWorkloadLabel, getSeverityClass are same) ...
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -83,6 +87,17 @@ function Dashboard() {
         fetchData();
     }, []);
 
+    // 自分のプロフィール更新をメンバー一覧に即座に反映させる
+    useEffect(() => {
+        if (user && members.length > 0) {
+            setMembers(prev => prev.map(m =>
+                m.email === user.email
+                    ? { ...m, name: user.name, picture: user.picture }
+                    : m
+            ));
+        }
+    }, [user]);
+
     const getStatusLabel = (status: string) => {
         const labels: Record<string, string> = {
             planning: '企画中',
@@ -114,166 +129,291 @@ function Dashboard() {
         return classes[severity] || '';
     };
 
-    if (isLoading) {
+
+    const CircularProgress = ({ value, size = 60, strokeWidth = 6, color = "var(--color-primary-500)" }: { value: number, size?: number, strokeWidth?: number, color?: string }) => {
+        // NaN値を0にフォールバック
+        const safeValue = isNaN(value) || !isFinite(value) ? 0 : value;
+        const radius = (size - strokeWidth) / 2;
+        const circumference = radius * 2 * Math.PI;
+        const offset = circumference - (safeValue / 100) * circumference;
+
         return (
-            <div className="dashboard-loading">
-                <div className="loading-spinner"></div>
-                <p>データを読み込み中...</p>
+            <div className="circular-progress" style={{ width: size, height: size }}>
+                <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+                    <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={radius}
+                        fill="none"
+                        stroke="var(--bg-tertiary)"
+                        strokeWidth={strokeWidth}
+                    />
+                    <circle
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={radius}
+                        fill="none"
+                        stroke={color}
+                        strokeWidth={strokeWidth}
+                        strokeDasharray={circumference}
+                        strokeDashoffset={offset}
+                        strokeLinecap="round"
+                        style={{ transition: 'stroke-dashoffset 1s ease' }}
+                    />
+                </svg>
+                <div className="circular-text">{Math.round(safeValue)}%</div>
             </div>
         );
+    };
+
+    const criticalAlert = alerts.find(a => a.severity === 'high' || a.severity === 'critical');
+
+    // Quick Actions Handlers
+    const handleNewProject = () => {
+        const newProject: any = {
+            id: `new_${Date.now()}`,
+            name: '新規プロジェクト',
+            status: 'planning',
+            progress: 0,
+            progressPercent: 0,
+            deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 week later
+            assignees: [],
+            description: '',
+            tasks: [],
+            category: 'General',
+            startDate: new Date(),
+            managerId: 'me',
+            relatedDocuments: [],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        };
+        setSelectedProject(newProject);
+    };
+
+    const handleAddMember = () => {
+        setMemberModalOpen(true);
+    };
+
+    const handleCreateReport = () => {
+        setReportModalOpen(true);
+    };
+
+    const handleMemberSave = (member: Member) => {
+        setMembers([...members, member]);
+        setMemberModalOpen(false);
+    };
+
+    const handleReportSave = (report: any) => {
+        console.log('Report saved:', report);
+        setReportModalOpen(false);
+    };
+
+    if (isLoading) {
+        return <DashboardSkeleton />;
     }
 
     return (
-        <div className="dashboard">
+        <div className="dashboard animate-fadeIn">
+
+            {/* Project Details Modal */}
+            {selectedProject && (
+                <ProjectModal
+                    project={{
+                        ...selectedProject,
+                        title: selectedProject.title || selectedProject.name,
+                        progress: selectedProject.progress || selectedProject.progressPercent || 0
+                    }}
+                    isOpen={!!selectedProject}
+                    onClose={() => setSelectedProject(null)}
+                    onUpdate={(updatedProject) => {
+                        setProjects(projects.map(p => p.id === updatedProject.id ? updatedProject : p));
+                        setSelectedProject(null);
+                    }}
+                    members={members}
+                    initialEditMode={selectedProject.id.startsWith('new_')}
+                    readOnly={user?.role === 'guest'}
+                />
+            )}
+
+
+            {/* Quick Actions FAB - ゲスト以外のみ表示 */}
+            {user?.role !== 'guest' && (
+                <QuickActions
+                    onNewProject={handleNewProject}
+                    onAddMember={handleAddMember}
+                    onCreateReport={handleCreateReport}
+                />
+            )}
+
+            {/* Member Modal */}
+            <MemberModal
+                isOpen={memberModalOpen}
+                onClose={() => setMemberModalOpen(false)}
+                onSave={handleMemberSave}
+            />
+
+            {/* Report Modal */}
+            <ReportModal
+                isOpen={reportModalOpen}
+                onClose={() => setReportModalOpen(false)}
+                projects={projects}
+                onSave={handleReportSave}
+            />
+
+            {/* AI Insights Widget */}
+            <ErrorBoundary fallback={<div className="ai-insights-widget error"><p>AIウィジェットの表示エラー</p></div>}>
+                <AIInsights />
+            </ErrorBoundary>
+
+            {/* Critical Alert Hero */}
+            {criticalAlert && (
+                <div className="hero-alert glass animate-pulse">
+                    <div className="hero-icon">⚠️</div>
+                    <div className="hero-content">
+                        <h3>Critical Alert Detected</h3>
+                        <p>{criticalAlert.message}</p>
+                    </div>
+                    <button className="hero-action">CHECK</button>
+                </div>
+            )}
+
             {/* サマリーカード */}
-            <div className="summary-cards">
-                <div className="summary-card glass animate-fadeIn">
-                    <div className="card-icon projects">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                        </svg>
-                    </div>
-                    <div className="card-content">
-                        <span className="card-value">{projects.length}</span>
-                        <span className="card-label">進行中プロジェクト</span>
-                    </div>
-                </div>
-
-                <div className="summary-card glass animate-fadeIn" style={{ animationDelay: '0.1s' }}>
-                    <div className="card-icon members">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                            <circle cx="9" cy="7" r="4" />
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                        </svg>
-                    </div>
-                    <div className="card-content">
-                        <span className="card-value">{members.length}</span>
-                        <span className="card-label">チームメンバー</span>
-                    </div>
-                </div>
-
-                <div className="summary-card glass animate-fadeIn" style={{ animationDelay: '0.2s' }}>
-                    <div className="card-icon alerts">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                            <line x1="12" y1="9" x2="12" y2="13" />
-                            <line x1="12" y1="17" x2="12.01" y2="17" />
-                        </svg>
-                    </div>
-                    <div className="card-content">
-                        <span className="card-value">{alerts.length}</span>
-                        <span className="card-label">アクティブアラート</span>
-                    </div>
-                </div>
-
-                <div className="summary-card glass animate-fadeIn" style={{ animationDelay: '0.3s' }}>
-                    <div className="card-icon progress">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="12" y1="20" x2="12" y2="10" />
-                            <line x1="18" y1="20" x2="18" y2="4" />
-                            <line x1="6" y1="20" x2="6" y2="16" />
-                        </svg>
-                    </div>
-                    <div className="card-content">
-                        <span className="card-value">
-                            {Math.round(projects.reduce((sum, p) => sum + p.progressPercent, 0) / projects.length)}%
-                        </span>
-                        <span className="card-label">平均進捗率</span>
-                    </div>
-                </div>
-            </div>
-
-            <div className="dashboard-grid">
-                {/* リスクアラート */}
-                {alerts.length > 0 && (
-                    <section className="dashboard-section alerts-section glass animate-fadeIn">
-                        <h2 className="section-title">
-                            <span className="title-icon">⚠️</span>
-                            リスクアラート
-                        </h2>
-                        <div className="alerts-list">
-                            {alerts.map((alert, index) => (
-                                <div key={index} className={`alert-item ${getSeverityClass(alert.severity)}`}>
-                                    <div className="alert-indicator"></div>
-                                    <div className="alert-content">
-                                        <p className="alert-message">{alert.message}</p>
-                                        <span className="alert-time">
-                                            {new Date(alert.detectedAt).toLocaleString('ja-JP')}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
+            <section className="summary-cards">
+                <div className="summary-card">
+                    <div className="card-header">
+                        <div className="card-icon projects">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="14" width="7" height="7"></rect>
+                                <rect x="3" y="14" width="7" height="7"></rect>
+                            </svg>
                         </div>
-                    </section>
-                )}
+                        <span className="card-label">Projects</span>
+                    </div>
+                    <div className="card-body">
+                        <div className="card-value">{projects.length}</div>
+                        <span className="card-sub">Active Projects</span>
+                    </div>
+                </div>
 
-                {/* プロジェクト一覧 */}
-                <section className="dashboard-section projects-section glass animate-fadeIn">
-                    <h2 className="section-title">
-                        <span className="title-icon">📊</span>
-                        プロジェクト進捗
-                    </h2>
-                    <div className="projects-list">
-                        {projects.map((project) => (
-                            <div key={project.id} className="project-item">
-                                <div className="project-header">
-                                    <h3 className="project-name">{project.name}</h3>
-                                    <span className={`status-badge ${project.status}`}>
-                                        {getStatusLabel(project.status)}
-                                    </span>
+                <div className="summary-card">
+                    <div className="card-header">
+                        <div className="card-icon members">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </div>
+                        <span className="card-label">Team</span>
+                    </div>
+                    <div className="card-body">
+                        <div className="card-value">{members.length}</div>
+                        <span className="card-sub">Members</span>
+                    </div>
+                </div>
+
+                <div className="summary-card">
+                    <div className="card-header">
+                        <div className="card-icon progress">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                            </svg>
+                        </div>
+                        <span className="card-label">Avg. Progress</span>
+                    </div>
+                    <div className="card-body">
+                        <div className="card-value">
+                            {(() => {
+                                const validProjects = projects.filter(p => !isNaN(p.progress) && isFinite(p.progress));
+                                return validProjects.length > 0
+                                    ? Math.round(validProjects.reduce((sum, p) => sum + p.progress, 0) / validProjects.length)
+                                    : 0;
+                            })()}%
+                        </div>
+                        <span className="card-sub">On Track</span>
+                    </div>
+                </div>
+            </section>
+
+            <div className="dashboard-grid layout-2-1">
+                {/* プロジェクト一覧 - Enhanced List */}
+                <section className="dashboard-section projects-section glass">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <h2 className="section-title" style={{ marginBottom: 0 }}>
+                            <span className="title-icon">📂</span> プロジェクト状況
+                        </h2>
+                        {user?.role !== 'guest' && (
+                            <button className="icon-btn-small" title="新規プロジェクト" onClick={handleNewProject}>＋</button>
+                        )}
+                    </div>
+
+                    <div className="projects-list-enhanced">
+                        {projects.map((project, i) => (
+                            <div
+                                key={project.id}
+                                className={`project-card-row ${user?.role === 'guest' ? 'readonly' : ''}`}
+                                style={{ animationDelay: `${i * 0.1}s`, cursor: user?.role === 'guest' ? 'default' : 'pointer' }}
+                                onClick={() => user?.role !== 'guest' && setSelectedProject(project)}
+                            >
+                                <div className="project-info-main">
+                                    <h3>{project.name}</h3>
+                                    <span className="deadline-badge">📅 {new Date(project.deadline).toLocaleDateString()}</span>
                                 </div>
-                                <div className="project-progress">
-                                    <div className="progress-bar">
-                                        <div
-                                            className="progress-fill"
-                                            style={{ width: `${project.progressPercent}%` }}
-                                        />
-                                    </div>
-                                    <span className="progress-text">{project.progressPercent}%</span>
-                                </div>
-                                <div className="project-meta">
-                                    <span className="deadline">
-                                        📅 期限: {new Date(project.deadline).toLocaleDateString('ja-JP')}
-                                    </span>
+                                <div className="project-status-visual">
+                                    <CircularProgress value={project.progress} size={45} strokeWidth={4} color={project.status === 'in_progress' ? 'var(--color-primary-500)' : 'var(--text-muted)'} />
                                 </div>
                             </div>
                         ))}
                     </div>
                 </section>
 
-                {/* メンバー一覧 */}
-                <section className="dashboard-section members-section glass animate-fadeIn">
-                    <h2 className="section-title">
-                        <span className="title-icon">👥</span>
-                        チームメンバー
-                    </h2>
-                    <div className="members-list">
-                        {members.map((member) => {
-                            const workload = getWorkloadLabel(member.workloadStatus);
+                {/* メンバー一覧 - Card Grid */}
+                <section className="dashboard-section members-section glass">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <h2 className="section-title" style={{ marginBottom: 0 }}>
+                            <span className="title-icon">💎</span> チームメンバー
+                        </h2>
+                        {user?.role !== 'guest' && (
+                            <button className="icon-btn-small" title="メンバー追加" onClick={handleAddMember}>＋</button>
+                        )}
+                    </div>
+
+                    <div className="members-grid">
+                        {members.map((member, i) => {
+                            const isBusy = member.workloadStatus === 'busy' || member.workloadStatus === 'overloaded';
                             return (
-                                <div key={member.id} className="member-item">
-                                    <div className="member-avatar">
-                                        {member.name.charAt(0)}
-                                    </div>
-                                    <div className="member-info">
-                                        <h3 className="member-name">{member.name}</h3>
-                                        <span className="member-department">{member.department}</span>
-                                        <div className="member-skills">
-                                            {member.skills.slice(0, 2).map((skill, i) => (
-                                                <span key={i} className="skill-tag">{skill.name}</span>
-                                            ))}
+                                <div key={member.id} className="member-card glass-hover" style={{ animationDelay: `${i * 0.1}s` }}>
+                                    <div className="member-card-header">
+                                        <div className={`avatar-ring ${member.workloadStatus}`}>
+                                            <div
+                                                className="member-avatar-lg"
+                                                style={{
+                                                    backgroundImage: (member.picture || member.avatarUrl) ? `url(${member.picture || member.avatarUrl})` : 'none',
+                                                    backgroundSize: 'cover',
+                                                    backgroundPosition: 'center',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    overflow: 'hidden'
+                                                }}
+                                            >
+                                                {!(member.picture || member.avatarUrl) && member.name.charAt(0)}
+                                            </div>
+                                        </div>
+                                        <div className="member-card-info">
+                                            <h4>{member.name}</h4>
+                                            <span>{member.department}</span>
                                         </div>
                                     </div>
-                                    <div className="member-status">
-                                        <span className={`workload-badge ${workload.className}`}>
-                                            {workload.text}
-                                        </span>
-                                        <span className="project-count">
-                                            {member.currentProjects.length}件担当
-                                        </span>
+                                    <div className="member-skills-chips">
+                                        {member.skills.slice(0, 3).map((s, idx) => (
+                                            <span key={idx} className="skill-chip">{s.name}</span>
+                                        ))}
                                     </div>
+                                    {isBusy && <div className="status-dot busy" title="Busy"></div>}
                                 </div>
                             );
                         })}

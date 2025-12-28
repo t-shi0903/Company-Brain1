@@ -8,12 +8,17 @@ export class GoogleDriveService {
     constructor() {
         // クラウド環境（環境変数）またはローカル（ファイル）から認証情報を取得
         if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-            const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-            const auth = new google.auth.GoogleAuth({
-                credentials,
-                scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-            });
-            this.drive = google.drive({ version: 'v3', auth });
+            try {
+                const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+                const auth = new google.auth.GoogleAuth({
+                    credentials,
+                    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+                });
+                this.drive = google.drive({ version: 'v3', auth });
+            } catch (e) {
+                console.error('Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:', e);
+                // エラー時は初期化しない（後続の呼び出しでエラーになるが、クラッシュは防ぐ）
+            }
         } else {
             const KEY_FILE = path.join(__dirname, '../../config/google-service-account.json');
 
@@ -34,6 +39,10 @@ export class GoogleDriveService {
      * 指定されたフォルダ内のファイル一覧を取得する
      */
     async listFiles(folderId: string) {
+        if (!this.drive) {
+            console.warn('Google Drive client is not initialized');
+            return [];
+        }
         try {
             const response = await this.drive.files.list({
                 q: `'${folderId}' in parents and trashed = false`,
@@ -50,6 +59,9 @@ export class GoogleDriveService {
      * ファイルのコンテンツを取得する (テキスト/PDF/Word/Excel/PPT等)
      */
     async getFileContent(fileId: string, mimeType: string): Promise<Buffer> {
+        if (!this.drive) {
+            throw new Error('Google Drive client is not initialized');
+        }
         try {
             if (mimeType === 'application/vnd.google-apps.document') {
                 // Googleドキュメント -> PDF

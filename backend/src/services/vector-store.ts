@@ -1,5 +1,5 @@
 import { Pinecone } from '@pinecone-database/pinecone';
-import { KnowledgeArticle } from '../types';
+import { Department, KnowledgeArticle } from '../types';
 import { getGeminiService } from './gemini';
 
 export class VectorStoreService {
@@ -41,6 +41,11 @@ export class VectorStoreService {
                 metadata.sourceUrl = article.sourceUrl;
             }
 
+            // 閲覧権限を保存 (String Array)
+            if (article.allowedDepartments) {
+                metadata.allowedDepartments = article.allowedDepartments;
+            }
+
             await index.upsert([{
                 id: article.id,
                 values: embedding,
@@ -53,9 +58,24 @@ export class VectorStoreService {
     }
 
     /**
+     * 記事をベクトルストアから削除
+     */
+    async deleteArticle(articleId: string) {
+        if (!this.pinecone) return;
+
+        try {
+            const index = this.pinecone.index(this.indexName);
+            await index.deleteOne(articleId);
+            console.log(`Deleted article ${articleId} from Pinecone`);
+        } catch (error) {
+            console.error('Pinecone delete error:', error);
+        }
+    }
+
+    /**
      * クエリに関連する記事を検索
      */
-    async search(query: string, limit: number = 5): Promise<KnowledgeArticle[]> {
+    async search(query: string, department?: Department, limit: number = 5): Promise<KnowledgeArticle[]> {
         if (!this.pinecone) return [];
 
         try {
@@ -63,10 +83,26 @@ export class VectorStoreService {
             const embedding = await gemini.generateEmbedding(query);
 
             const index = this.pinecone.index(this.indexName);
+
+            const filter: any = {};
+            // departmentが指定され、adminでない場合はフィルタリング
+            if (department && department !== 'admin') {
+                // シンプルに "allowedDepartments" に department が含まれているかチェック
+                // Pineconeのメタデータ配列フィルタ: "field": { "$in": ["value"] } ではなく
+                // 配列フィールドに対して単一値でフィルタすると「含まれるか」になる
+                filter.allowedDepartments = department;
+
+                // フォールバック: 'general' (全社公開) も含めたい場合は $or が必要だが、
+                // Pinecone Free Tier ($or support) 次第。ここでは安全側で AND 的な挙動（department権限必須）とするか、
+                // シンプルに department (例: 'sales') を指定する。
+                // 'general' は全員が持っているロールではないため、ドキュメント側に ['general', 'sales'] とついていれば 'sales' でヒットする。
+            }
+
             const results = await index.query({
                 vector: embedding,
                 topK: limit,
-                includeMetadata: true
+                includeMetadata: true,
+                filter: Object.keys(filter).length > 0 ? filter : undefined
             });
 
             // Pineconeの結果をKnowledgeArticle形式に変換（簡易的）
@@ -91,7 +127,8 @@ export class VectorStoreService {
                     updatedAt: new Date(),
                     viewCount: 0,
                     relatedArticleIds: [],
-                    attachments: []
+                    attachments: [],
+                    allowedDepartments: md.allowedDepartments || []
                 };
             });
         } catch (error) {
