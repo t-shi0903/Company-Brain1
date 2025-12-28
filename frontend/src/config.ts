@@ -1,5 +1,5 @@
 export const APP_CONFIG = {
-    API_BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001',
+    API_BASE_URL: import.meta.env.VITE_API_BASE_URL !== undefined ? import.meta.env.VITE_API_BASE_URL : 'http://localhost:3001',
     GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID || '163266853240-cinakd0lkviu6u91r4b7qk6s4pfgo38u.apps.googleusercontent.com',
 };
 
